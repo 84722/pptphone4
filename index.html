@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>集团宣传册</title>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
+  <!-- Swiper -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css"/>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    .swiper {
+      width: 100%;
+      height: 100%;
+    }
+    .swiper-slide {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #000;
+    }
+    canvas {
+      background: #fff;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="swiper" id="swiper">
+    <div class="swiper-wrapper" id="pdf-viewer"></div>
+    <div class="swiper-pagination"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
+  <script>
+    const url = "./ttpdf.pdf"; // 确保 PDF 文件和 index.html 在同目录
+    const viewer = document.getElementById("pdf-viewer");
+    let pdfDoc = null;
+    let swiper = null;
+    const renderedPages = new Set();
+    let firstPageCanvas = null; // 缓存第一页
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+
+    // 渲染单页
+    function renderPage(pageNum, container) {
+      if (pageNum === 1 && firstPageCanvas) {
+        container.appendChild(firstPageCanvas);
+        return Promise.resolve();
+      }
+      if (renderedPages.has(pageNum)) return Promise.resolve();
+
+      return pdfDoc.getPage(pageNum).then(page => {
+        const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+        const viewport = page.getViewport({ scale: 2 }); // 高分渲染
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        // 横屏全屏，竖屏按宽度缩放
+        const containerWidth = isLandscape ? window.innerWidth : window.innerWidth * 0.9;
+        const scale = containerWidth / viewport.width * 2; // pdfjs scale * 缩放比例
+        const scaledViewport = page.getViewport({ scale });
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+        canvas.style.width = isLandscape ? "100vw" : "90vw";
+        canvas.style.height = "auto";
+
+        page.render({ canvasContext: context, viewport: scaledViewport });
+        container.appendChild(canvas);
+
+        if (pageNum === 1) firstPageCanvas = canvas; // 缓存第一页
+        renderedPages.add(pageNum);
+      });
+    }
+
+    function initSwiper() {
+      if (swiper) swiper.destroy();
+      swiper = new Swiper('.swiper', {
+        direction: 'horizontal',
+        loop: false,
+        pagination: { el: '.swiper-pagination' },
+        on: {
+          slideChange: () => {
+            const pageNum = swiper.activeIndex + 1;
+            const slide = viewer.children[pageNum - 1];
+            renderPage(pageNum, slide);
+          }
+        }
+      });
+    }
+
+    function handleOrientation() {
+      // 横竖屏切换时，重新渲染已加载页
+      for (let i = 0; i < pdfDoc.numPages; i++) {
+        const slide = viewer.children[i];
+        if (slide.hasChildNodes()) {
+          const canvas = slide.querySelector("canvas");
+          if (canvas) canvas.remove(); // 删除旧 canvas
+          renderPage(i + 1, slide);
+        }
+      }
+    }
+
+    // 初始化 PDF
+    pdfjsLib.getDocument(url).promise.then(pdf => {
+      pdfDoc = pdf;
+      // 创建 slide
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const slide = document.createElement("div");
+        slide.className = "swiper-slide";
+        slide.dataset.pageNum = i;
+        viewer.appendChild(slide);
+      }
+      initSwiper();
+      // 立即渲染第一页
+      renderPage(1, viewer.children[0]);
+    }).catch(err => {
+      console.error(err);
+      viewer.innerHTML = "<p style='color:red;'>PDF 加载失败，请检查路径或网络</p >";
+    });
+
+    window.addEventListener("orientationchange", () => {
+      setTimeout(handleOrientation, 300);
+    });
+  </script>
+</body>
+</html>
