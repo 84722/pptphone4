@@ -29,10 +29,9 @@
     }
     canvas {
       background: #fff;
-      max-width: 100%;
-      max-height: 100%;
       border-radius: 4px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: block;
     }
   </style>
 </head>
@@ -44,7 +43,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
   <script>
-    const url = "./ttpdf.pdf"; // PDF 文件路径，确保和 index.html 在同目录
+    const url = "./ttpdf.pdf"; // PDF 文件路径，确保和 index.html 同目录
     const viewer = document.getElementById("pdf-viewer");
     let pdfDoc = null;
     let swiper = null;
@@ -53,7 +52,6 @@
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
-    // 渲染单页
     function renderPage(pageNum, container) {
       if (pageNum === 1 && firstPageCanvas) {
         container.appendChild(firstPageCanvas);
@@ -63,20 +61,22 @@
 
       return pdfDoc.getPage(pageNum).then(page => {
         const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-        const baseScale = isLandscape ? 3 : 2; // 横屏高分，竖屏略缩小
+        const dpr = window.devicePixelRatio || 1;
+        const baseScale = 3; // 高分渲染
         const viewport = page.getViewport({ scale: baseScale });
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
 
-        // 横屏全屏，竖屏按宽度缩放
+        // 横屏全屏，竖屏按宽度自适应
         const containerWidth = isLandscape ? window.innerWidth : window.innerWidth * 0.9;
-        const scale = containerWidth / viewport.width * baseScale;
+        const scale = (containerWidth / viewport.width) * baseScale;
         const scaledViewport = page.getViewport({ scale });
 
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
+        canvas.width = scaledViewport.width * dpr;
+        canvas.height = scaledViewport.height * dpr;
         canvas.style.width = isLandscape ? "100vw" : "90vw";
         canvas.style.height = "auto";
+        context.setTransform(dpr, 0, 0, dpr, 0, 0); // 高分渲染
 
         page.render({ canvasContext: context, viewport: scaledViewport });
         container.appendChild(canvas);
@@ -103,18 +103,16 @@
     }
 
     function handleOrientation() {
-      // 横竖屏切换时，重新渲染已加载页
       for (let i = 0; i < pdfDoc.numPages; i++) {
         const slide = viewer.children[i];
         if (slide.hasChildNodes()) {
           const canvas = slide.querySelector("canvas");
-          if (canvas) canvas.remove(); // 删除旧 canvas
+          if (canvas) canvas.remove();
           renderPage(i + 1, slide);
         }
       }
     }
 
-    // 初始化 PDF
     pdfjsLib.getDocument(url).promise.then(pdf => {
       pdfDoc = pdf;
       // 创建 slide
