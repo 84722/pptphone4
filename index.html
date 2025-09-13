@@ -1,138 +1,122 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
+<html lang="zh"><head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>集团宣传册</title>
-  <!-- PDF.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
-  <!-- Swiper -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css"/>
+  <!-- 升级到最新稳定版pdf.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
-      height: 100%;
-      background: #000;
-      overflow: hidden;
+      padding: 20px;
+      background: #f5f5f5;
+      font-family: Arial, sans-serif;
     }
-    .swiper {
+    #viewer {
       width: 100%;
-      height: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
     }
-    .swiper-slide {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: #000;
+    .loading {
+      color: #666;
+      padding: 40px 0;
+    }
+    .error {
+      color: #dc3545;
+      padding: 40px 0;
     }
     canvas {
+      width: 100%;
+      margin-bottom: 10px;
       background: #fff;
-      border-radius: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      display: block;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
   </style>
 </head>
 <body>
-  <div class="swiper" id="swiper">
-    <div class="swiper-wrapper" id="pdf-viewer"></div>
-    <div class="swiper-pagination"></div>
+  <div id="viewer">
+    <!-- 增加加载状态提示 -->
+    <div class="loading">正在加载PDF文件，请稍候...</div>
   </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
   <script>
-    const url = "./ttpdf.pdf"; // PDF 文件路径，确保和 index.html 同目录
-    const viewer = document.getElementById("pdf-viewer");
-    let pdfDoc = null;
-    let swiper = null;
-    const renderedPages = new Set();
-    let firstPageCanvas = null; // 缓存第一页
+    // PDF文件路径 - 建议使用完整URL以避免路径问题
+    const url = "ttpdf.pdf"; 
+    const viewer = document.getElementById('viewer');
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+    // 确保pdfjsLib正确加载
+    if (typeof pdfjsLib === 'undefined') {
+      viewer.innerHTML = '<div class="error">PDF查看器加载失败，请刷新页面重试</div>';
+    } else {
+      // 配置pdf.js的工作器
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    function renderPage(pageNum, container) {
-      if (pageNum === 1 && firstPageCanvas) {
-        container.appendChild(firstPageCanvas);
-        return Promise.resolve();
-      }
-      if (renderedPages.has(pageNum)) return Promise.resolve();
-
-      return pdfDoc.getPage(pageNum).then(page => {
-        const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-        const dpr = window.devicePixelRatio || 1;
-        const baseScale = 3; // 高分渲染
-        const viewport = page.getViewport({ scale: baseScale });
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-
-        // 横屏全屏，竖屏按宽度自适应
-        const containerWidth = isLandscape ? window.innerWidth : window.innerWidth * 0.9;
-        const scale = (containerWidth / viewport.width) * baseScale;
-        const scaledViewport = page.getViewport({ scale });
-
-        canvas.width = scaledViewport.width * dpr;
-        canvas.height = scaledViewport.height * dpr;
-        canvas.style.width = isLandscape ? "100vw" : "90vw";
-        canvas.style.height = "auto";
-        context.setTransform(dpr, 0, 0, dpr, 0, 0); // 高分渲染
-
-        page.render({ canvasContext: context, viewport: scaledViewport });
-        container.appendChild(canvas);
-
-        if (pageNum === 1) firstPageCanvas = canvas; // 缓存第一页
-        renderedPages.add(pageNum);
-      });
-    }
-
-    function initSwiper() {
-      if (swiper) swiper.destroy();
-      swiper = new Swiper('.swiper', {
-        direction: 'horizontal',
-        loop: false,
-        pagination: { el: '.swiper-pagination' },
-        on: {
-          slideChange: () => {
-            const pageNum = swiper.activeIndex + 1;
-            const slide = viewer.children[pageNum - 1];
-            renderPage(pageNum, slide);
+      // 加载并渲染PDF
+      pdfjsLib.getDocument(url).promise
+        .then(pdf => {
+          // 清除加载提示
+          viewer.innerHTML = '';
+          
+          // 显示总页数信息
+          const pageInfo = document.createElement('p');
+          pageInfo.textContent = `共 ${pdf.numPages} 页`;
+          pageInfo.style.color = '#666';
+          viewer.appendChild(pageInfo);
+          
+          // 降低缩放比例到1.0，减少内存占用
+          const scale = 1.0;
+          
+          // 逐页渲染
+          for (let i = 1; i <= pdf.numPages; i++) {
+            pdf.getPage(i)
+              .then(page => {
+                const viewport = page.getViewport({ scale });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                
+                // 设置canvas尺寸
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                canvas.title = `第 ${i} 页`;
+                
+                // 添加到页面
+                viewer.appendChild(canvas);
+                
+                // 渲染页面
+                const renderContext = {
+                  canvasContext: context,
+                  viewport: viewport
+                };
+                
+                return page.render(renderContext).promise;
+              })
+              .catch(err => {
+                console.error(`第${i}页渲染失败:`, err);
+                const errorEl = document.createElement('div');
+                errorEl.className = 'error';
+                errorEl.textContent = `第${i}页加载失败`;
+                viewer.appendChild(errorEl);
+              });
           }
-        }
-      });
+        })
+        .catch(err => {
+          console.error('PDF文件加载失败:', err);
+          // 显示具体错误信息
+          let errorMessage = 'PDF文件加载失败，请检查网络连接或文件是否存在';
+          
+          // 根据错误类型提供更具体的提示
+          if (err.name === 'MissingPDFException') {
+            errorMessage = '未找到PDF文件，请确认文件路径是否正确';
+          } else if (err.name === 'InvalidPDFException') {
+            errorMessage = 'PDF文件损坏或格式不正确';
+          } else if (err.message.includes('CORS')) {
+            errorMessage = '跨域访问被阻止，请检查服务器配置';
+          }
+          
+          viewer.innerHTML = `<div class="error">${errorMessage}</div>`;
+        });
     }
-
-    function handleOrientation() {
-      for (let i = 0; i < pdfDoc.numPages; i++) {
-        const slide = viewer.children[i];
-        if (slide.hasChildNodes()) {
-          const canvas = slide.querySelector("canvas");
-          if (canvas) canvas.remove();
-          renderPage(i + 1, slide);
-        }
-      }
-    }
-
-    pdfjsLib.getDocument(url).promise.then(pdf => {
-      pdfDoc = pdf;
-      // 创建 slide
-      for (let i = 1; i <= pdfDoc.numPages; i++) {
-        const slide = document.createElement("div");
-        slide.className = "swiper-slide";
-        slide.dataset.pageNum = i;
-        viewer.appendChild(slide);
-      }
-      initSwiper();
-      // 渲染第一页
-      renderPage(1, viewer.children[0]);
-    }).catch(err => {
-      console.error(err);
-      viewer.innerHTML = "<p style='color:red;'>PDF 加载失败，请检查路径或网络</p >";
-    });
-
-    window.addEventListener("orientationchange", () => {
-      setTimeout(handleOrientation, 300);
-    });
   </script>
-</body>
-</html>
+
+
+</body></html>
