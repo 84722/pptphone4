@@ -44,7 +44,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
   <script>
-    const url = "./ttpdf.pdf"; // 确保 PDF 文件和 index.html 在同目录
+    const url = "./ttpdf.pdf"; // PDF 文件路径，确保和 index.html 在同目录
     const viewer = document.getElementById("pdf-viewer");
     let pdfDoc = null;
     let swiper = null;
@@ -63,13 +63,14 @@
 
       return pdfDoc.getPage(pageNum).then(page => {
         const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-        const viewport = page.getViewport({ scale: 2 }); // 高分渲染
+        const baseScale = isLandscape ? 3 : 2; // 横屏高分，竖屏略缩小
+        const viewport = page.getViewport({ scale: baseScale });
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
 
         // 横屏全屏，竖屏按宽度缩放
         const containerWidth = isLandscape ? window.innerWidth : window.innerWidth * 0.9;
-        const scale = containerWidth / viewport.width * 2; // pdfjs scale * 缩放比例
+        const scale = containerWidth / viewport.width * baseScale;
         const scaledViewport = page.getViewport({ scale });
 
         canvas.width = scaledViewport.width;
@@ -124,7 +125,7 @@
         viewer.appendChild(slide);
       }
       initSwiper();
-      // 立即渲染第一页
+      // 渲染第一页
       renderPage(1, viewer.children[0]);
     }).catch(err => {
       console.error(err);
